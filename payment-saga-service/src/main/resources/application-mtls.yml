@@ -1,0 +1,26 @@
+# Activated with SPRING_PROFILES_ACTIVE=...,mtls  (certs mounted by cert-manager at /etc/certs)
+spring:
+  ssl:
+    bundle:
+      pem:
+        mtls:
+          keystore:
+            certificate: file:/etc/certs/tls.crt
+            private-key: file:/etc/certs/tls.key
+          truststore:
+            certificate: file:/etc/certs/ca.crt
+server:
+  http2:
+    enabled: true
+  ssl:
+    bundle: mtls
+    client-auth: need
+management:
+  server:
+    port: 9090
+    ssl:
+      enabled: false
+eureka:
+  instance:
+    secure-port-enabled: true
+    non-secure-port-enabled: false

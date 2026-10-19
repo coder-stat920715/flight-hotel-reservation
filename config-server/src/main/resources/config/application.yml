@@ -1,0 +1,8 @@
+# Shared defaults served to every client (overridden by each service's own application.yml
+# only where the client defines the same key; Config Server values win over local files).
+spring:
+  kafka:
+    template:
+      observation-enabled: true
+    listener:
+      observation-enabled: true

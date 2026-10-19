@@ -1,0 +1,130 @@
+# Bidirectional mTLS: a private CA (cert-manager) issues one cert per service with BOTH serverAuth and clientAuth usages.
+# Secrets <service>-tls contain tls.crt, tls.key and ca.crt, mounted at /etc/certs and consumed by the Spring SSL bundle "mtls".
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-bootstrap
+  namespace: travel-platform
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: travel-internal-ca
+  namespace: travel-platform
+spec:
+  isCA: true
+  commonName: travel-internal-ca
+  secretName: travel-internal-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-bootstrap
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: travel-ca-issuer
+  namespace: travel-platform
+spec:
+  ca:
+    secretName: travel-internal-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api-gateway
+  namespace: travel-platform
+spec:
+  secretName: api-gateway-tls
+  duration: 720h
+  renewBefore: 240h
+  commonName: api-gateway
+  dnsNames:
+    - api-gateway
+    - api-gateway.travel-platform.svc
+    - api-gateway.travel-platform.svc.cluster.local
+  usages:
+    - server auth
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: travel-ca-issuer
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: booking-command-service
+  namespace: travel-platform
+spec:
+  secretName: booking-command-service-tls
+  duration: 720h
+  renewBefore: 240h
+  commonName: booking-command-service
+  dnsNames:
+    - booking-command-service
+    - booking-command-service.travel-platform.svc
+    - booking-command-service.travel-platform.svc.cluster.local
+  usages:
+    - server auth
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: travel-ca-issuer
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: flight-hotel-query-service
+  namespace: travel-platform
+spec:
+  secretName: flight-hotel-query-service-tls
+  duration: 720h
+  renewBefore: 240h
+  commonName: flight-hotel-query-service
+  dnsNames:
+    - flight-hotel-query-service
+    - flight-hotel-query-service.travel-platform.svc
+    - flight-hotel-query-service.travel-platform.svc.cluster.local
+  usages:
+    - server auth
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: travel-ca-issuer
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: payment-saga-service
+  namespace: travel-platform
+spec:
+  secretName: payment-saga-service-tls
+  duration: 720h
+  renewBefore: 240h
+  commonName: payment-saga-service
+  dnsNames:
+    - payment-saga-service
+    - payment-saga-service.travel-platform.svc
+    - payment-saga-service.travel-platform.svc.cluster.local
+  usages:
+    - server auth
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: travel-ca-issuer
+    kind: Issuer

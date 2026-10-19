@@ -1,0 +1,611 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-server
+  namespace: travel-platform
+  labels:
+    app: config-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: config-server
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: config-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: config-server
+      containers:
+        - name: config-server
+          image: ${ECR_REGISTRY}/config-server:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8888
+            - name: mgmt
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: platform-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: mgmt
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: mgmt
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/certs
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: config-server-tls
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-server
+  namespace: travel-platform
+  labels:
+    app: config-server
+spec:
+  type: ClusterIP
+  selector:
+    app: config-server
+  ports:
+    - name: http
+      port: 8888
+      targetPort: http
+    - name: mgmt
+      port: 9090
+      targetPort: mgmt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discovery-server
+  namespace: travel-platform
+  labels:
+    app: discovery-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: discovery-server
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: discovery-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: discovery-server
+      containers:
+        - name: discovery-server
+          image: ${ECR_REGISTRY}/discovery-server:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8761
+            - name: mgmt
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: platform-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: mgmt
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: mgmt
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/certs
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: discovery-server-tls
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-server
+  namespace: travel-platform
+  labels:
+    app: discovery-server
+spec:
+  type: ClusterIP
+  selector:
+    app: discovery-server
+  ports:
+    - name: http
+      port: 8761
+      targetPort: http
+    - name: mgmt
+      port: 9090
+      targetPort: mgmt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: travel-platform
+  labels:
+    app: api-gateway
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-gateway
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: api-gateway
+      containers:
+        - name: api-gateway
+          image: ${ECR_REGISTRY}/api-gateway:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: mgmt
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: platform-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod,mtls"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: mgmt
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: mgmt
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/certs
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: api-gateway-tls
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: travel-platform
+  labels:
+    app: api-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: mgmt
+      port: 9090
+      targetPort: mgmt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: booking-command-service
+  namespace: travel-platform
+  labels:
+    app: booking-command-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: booking-command-service
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: booking-command-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: booking-command-service
+      containers:
+        - name: booking-command-service
+          image: ${ECR_REGISTRY}/booking-command-service:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+            - name: mgmt
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: platform-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod,mtls"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: mgmt
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: mgmt
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/certs
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: booking-command-service-tls
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: booking-command-service
+  namespace: travel-platform
+  labels:
+    app: booking-command-service
+spec:
+  type: ClusterIP
+  selector:
+    app: booking-command-service
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
+    - name: mgmt
+      port: 9090
+      targetPort: mgmt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flight-hotel-query-service
+  namespace: travel-platform
+  labels:
+    app: flight-hotel-query-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: flight-hotel-query-service
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: flight-hotel-query-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: flight-hotel-query-service
+      containers:
+        - name: flight-hotel-query-service
+          image: ${ECR_REGISTRY}/flight-hotel-query-service:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8082
+            - name: mgmt
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: platform-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod,mtls"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: mgmt
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: mgmt
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/certs
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: flight-hotel-query-service-tls
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flight-hotel-query-service
+  namespace: travel-platform
+  labels:
+    app: flight-hotel-query-service
+spec:
+  type: ClusterIP
+  selector:
+    app: flight-hotel-query-service
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http
+    - name: mgmt
+      port: 9090
+      targetPort: mgmt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-saga-service
+  namespace: travel-platform
+  labels:
+    app: payment-saga-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: payment-saga-service
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: payment-saga-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: payment-saga-service
+      containers:
+        - name: payment-saga-service
+          image: ${ECR_REGISTRY}/payment-saga-service:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+            - name: mgmt
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: platform-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod,mtls"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: mgmt
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: mgmt
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/certs
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: payment-saga-service-tls
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-saga-service
+  namespace: travel-platform
+  labels:
+    app: payment-saga-service
+spec:
+  type: ClusterIP
+  selector:
+    app: payment-saga-service
+  ports:
+    - name: http
+      port: 8083
+      targetPort: http
+    - name: mgmt
+      port: 9090
+      targetPort: mgmt

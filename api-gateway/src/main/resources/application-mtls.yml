@@ -1,0 +1,19 @@
+# Outbound mTLS from the gateway to downstream services (Spring Cloud Gateway 4.1+ SSL bundle support)
+spring:
+  ssl:
+    bundle:
+      pem:
+        mtls:
+          keystore:
+            certificate: file:/etc/certs/tls.crt
+            private-key: file:/etc/certs/tls.key
+          truststore:
+            certificate: file:/etc/certs/ca.crt
+  cloud:
+    gateway:
+      httpclient:
+        ssl:
+          ssl-bundle: mtls
+management:
+  server:
+    port: 9090

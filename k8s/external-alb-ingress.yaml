@@ -1,0 +1,24 @@
+# Layer 1 - EXTERNAL load balancer. The ALB itself (public subnets, TLS 1.3 policy, WAF association, CloudFront-only
+# security group) is created by Terraform (terraform/main.tf). Pods register into its IP target group through the
+# AWS Load Balancer Controller's TargetGroupBinding. Apply with envsubst (GATEWAY_TARGET_GROUP_ARN = terraform output).
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: api-gateway-external
+  namespace: travel-platform
+spec:
+  serviceRef:
+    name: api-gateway
+    port: 8080
+  targetGroupARN: ${GATEWAY_TARGET_GROUP_ARN}
+  targetType: ip
+  networking:
+    ingress:
+      - from:
+          - securityGroup:
+              groupID: ${EXTERNAL_ALB_SECURITY_GROUP_ID}
+        ports:
+          - protocol: TCP
+            port: 8080
+          - protocol: TCP
+            port: 9090

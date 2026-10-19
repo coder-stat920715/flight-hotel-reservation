@@ -1,0 +1,1645 @@
+{
+  "info": {
+    "name": "Travel Platform - Spring Microservices Ecosystem",
+    "description": "End-to-end tests for the booking / budget-estimator platform. See POSTMAN_TESTING_GUIDE.md for set-up and run order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "0. Infrastructure & health checks",
+      "description": "Run these first. No token needed. Every request must pass before you continue.",
+      "item": [
+        {
+          "name": "Config server - shared config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{configUrl}}/application/default",
+            "description": "Config Server (native profile) must serve classpath:/config/application.yml.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"serves the shared application.yml\", () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.name).to.eql(\"application\");",
+                  "  pm.expect(j.propertySources.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eureka - registered services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{eurekaUrl}}/eureka/apps",
+            "description": "Services may take ~30 s after start-up to appear in Eureka.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const names = [].concat(pm.response.json().applications.application || []).map(a => a.name);",
+                  "[\"API-GATEWAY\",\"BOOKING-COMMAND-SERVICE\",\"FLIGHT-HOTEL-QUERY-SERVICE\",\"PAYMENT-SAGA-SERVICE\"].forEach(n =>",
+                  "  pm.test(n + \" is registered\", () => pm.expect(names).to.include(n)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API Gateway - health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/actuator/health",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Booking command service - health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{commandUrl}}/actuator/health",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Query service - health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{queryUrl}}/actuator/health",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payment saga service - health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paymentUrl}}/actuator/health",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prometheus metrics endpoint",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{commandUrl}}/actuator/prometheus",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"JVM metrics exposed\", () => pm.expect(pm.response.text()).to.include(\"jvm_memory_used_bytes\"));",
+                  "pm.test(\"HTTP histogram exposed (needed for p95 panel)\", () => pm.expect(pm.response.text()).to.include(\"http_server_requests_seconds_bucket\"));",
+                  "pm.test(\"application tag present\", () => pm.expect(pm.response.text()).to.include('application=\"booking-command-service\"'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Debezium - register outbox connector",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{connectUrl}}/connectors",
+            "description": "Same JSON as debezium/postgres-outbox-connector.json. 409 means it already exists - fine.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"travel-outbox-connector\",\n  \"config\": {\n    \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",\n    \"plugin.name\": \"pgoutput\",\n    \"database.hostname\": \"postgres\",\n    \"database.port\": \"5432\",\n    \"database.user\": \"travel\",\n    \"database.password\": \"travel\",\n    \"database.dbname\": \"travel\",\n    \"topic.prefix\": \"travel\",\n    \"slot.name\": \"travel_outbox_slot\",\n    \"publication.autocreate.mode\": \"filtered\",\n    \"table.include.list\": \"public.outbox_events\",\n    \"tombstones.on.delete\": \"false\",\n    \"key.converter\": \"org.apache.kafka.connect.storage.StringConverter\",\n    \"value.converter\": \"org.apache.kafka.connect.json.JsonConverter\",\n    \"value.converter.schemas.enable\": \"false\",\n    \"transforms\": \"outbox\",\n    \"transforms.outbox.type\": \"io.debezium.transforms.outbox.EventRouter\",\n    \"transforms.outbox.table.field.event.id\": \"id\",\n    \"transforms.outbox.table.field.event.key\": \"aggregateid\",\n    \"transforms.outbox.table.field.event.type\": \"type\",\n    \"transforms.outbox.table.field.event.payload\": \"payload\",\n    \"transforms.outbox.table.expand.json.payload\": \"true\",\n    \"transforms.outbox.route.by.field\": \"aggregatetype\",\n    \"transforms.outbox.route.topic.replacement\": \"${routedByValue}\",\n    \"transforms.outbox.table.fields.additional.placement\": \"type:header:eventType,traceparent:header:traceparent\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created (or 409 if already registered)\", () => pm.expect([201, 409]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Debezium - connector status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{connectUrl}}/connectors/travel-outbox-connector/status",
+            "description": "If the task is FAILED, check wal_level=logical on Postgres and the connector logs.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test(\"connector RUNNING\", () => pm.expect(s.connector.state).to.eql(\"RUNNING\"));",
+                  "pm.test(\"task 0 RUNNING\", () => pm.expect(s.tasks[0].state).to.eql(\"RUNNING\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prometheus - scrape targets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{prometheusUrl}}/api/v1/targets",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"targets discovered\", () => pm.expect(pm.response.json().data.activeTargets.length).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Jaeger - services that sent traces",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{jaegerUrl}}/api/services",
+            "description": "Re-run after folder 3; you should see api-gateway, booking-command-service, payment-saga-service, flight-hotel-query-service.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Run this AFTER the booking flow - services visible\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Authentication (Keycloak)",
+      "description": "Obtain JWTs. The tests also decode the token and assert the roles / tenant_id / user_location claims.",
+      "item": [
+        {
+          "name": "Get token - alice (CUSTOMER, tenant t1, IN)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token",
+            "description": "Direct Access Grants (password) flow against Keycloak - test convenience only.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}"
+                },
+                {
+                  "key": "username",
+                  "value": "{{username}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"access_token returned\", () => pm.expect(j.access_token).to.be.a(\"string\"));",
+                  "pm.environment.set(\"token\", j.access_token);",
+                  "// decode the JWT payload and verify the claims our services depend on",
+                  "const p = JSON.parse(atob(j.access_token.split(\".\")[1].replace(/-/g, \"+\").replace(/_/g, \"/\")));",
+                  "pm.test(\"realm roles claim present (RBAC)\", () => pm.expect(p.realm_access.roles).to.be.an(\"array\"));",
+                  "pm.test(\"tenant_id claim present (ABAC)\", () => pm.expect(p.tenant_id).to.be.a(\"string\"));",
+                  "pm.test(\"user_location claim present (ABAC)\", () => pm.expect(p.user_location).to.be.a(\"string\"));",
+                  "console.log(\"sub=\" + p.sub, \"roles=\" + p.realm_access.roles, \"tenant=\" + p.tenant_id, \"loc=\" + p.user_location);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get token - bob (CUSTOMER, tenant t2, IN)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token",
+            "description": "Direct Access Grants (password) flow against Keycloak - test convenience only.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}"
+                },
+                {
+                  "key": "username",
+                  "value": "{{user2}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"access_token returned\", () => pm.expect(j.access_token).to.be.a(\"string\"));",
+                  "pm.environment.set(\"user2Token\", j.access_token);",
+                  "// decode the JWT payload and verify the claims our services depend on",
+                  "const p = JSON.parse(atob(j.access_token.split(\".\")[1].replace(/-/g, \"+\").replace(/_/g, \"/\")));",
+                  "pm.test(\"realm roles claim present (RBAC)\", () => pm.expect(p.realm_access.roles).to.be.an(\"array\"));",
+                  "pm.test(\"tenant_id claim present (ABAC)\", () => pm.expect(p.tenant_id).to.be.a(\"string\"));",
+                  "pm.test(\"user_location claim present (ABAC)\", () => pm.expect(p.user_location).to.be.a(\"string\"));",
+                  "console.log(\"sub=\" + p.sub, \"roles=\" + p.realm_access.roles, \"tenant=\" + p.tenant_id, \"loc=\" + p.user_location);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get token - admin (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token",
+            "description": "Direct Access Grants (password) flow against Keycloak - test convenience only.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}"
+                },
+                {
+                  "key": "username",
+                  "value": "{{adminUser}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"access_token returned\", () => pm.expect(j.access_token).to.be.a(\"string\"));",
+                  "pm.environment.set(\"adminToken\", j.access_token);",
+                  "// decode the JWT payload and verify the claims our services depend on",
+                  "const p = JSON.parse(atob(j.access_token.split(\".\")[1].replace(/-/g, \"+\").replace(/_/g, \"/\")));",
+                  "pm.test(\"realm roles claim present (RBAC)\", () => pm.expect(p.realm_access.roles).to.be.an(\"array\"));",
+                  "pm.test(\"tenant_id claim present (ABAC)\", () => pm.expect(p.tenant_id).to.be.a(\"string\"));",
+                  "pm.test(\"user_location claim present (ABAC)\", () => pm.expect(p.user_location).to.be.a(\"string\"));",
+                  "console.log(\"sub=\" + p.sub, \"roles=\" + p.realm_access.roles, \"tenant=\" + p.tenant_id, \"loc=\" + p.user_location);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Gateway rejects request without token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=BKK&nights=4",
+            "description": "The gateway (OAuth2 resource server) must reject anonymous calls.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 Unauthorized\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Gateway rejects tampered token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}x"
+              }
+            ],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=BKK&nights=4",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 Unauthorized (bad signature)\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Travel queries (read side, CQRS)",
+      "description": "Expected numbers are computed from db/V2__insert_sample_travel_data.sql (INR).",
+      "item": [
+        {
+          "name": "Estimate budget CCU -> BKK (4 nights)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=BKK&nights=4",
+            "description": "11900 flight + 4x650 hotel + 2180 sightseeing = 16680. First call = DB (cache miss).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"route\", () => { pm.expect(b.sourceCode).to.eql(\"CCU\"); pm.expect(b.destinationCity).to.eql(\"Bangkok\"); });",
+                  "pm.test(\"cheapest flight = FD-136 @ 11900\", () => { pm.expect(b.flightNumber).to.eql(\"FD-136\"); pm.expect(Number(b.flightFare)).to.eql(11900); });",
+                  "pm.test(\"cheapest hotel in destination city\", () => { pm.expect(b.recommendedHotel).to.eql(\"Sukhumvit Budget Inn\"); pm.expect(b.roomType).to.eql(\"Dorm Bed\"); pm.expect(Number(b.pricePerNight)).to.eql(650); });",
+                  "pm.test(\"hotel cost = price x 4 nights\", () => pm.expect(Number(b.totalHotelCost)).to.eql(650 * 4));",
+                  "pm.test(\"sightseeing: 5 places, 2180 total\", () => { pm.expect(b.totalAttractionsPlanned).to.eql(5); pm.expect(Number(b.totalSightseeingCost)).to.eql(2180); });",
+                  "pm.test(\"TOTAL BUDGET = 16680\", () => pm.expect(Number(b.totalEstimatedTripBudget)).to.eql(16680));",
+                  "pm.test(\"total equals flight + hotel + sightseeing\", () =>",
+                  "  pm.expect(Number(b.totalEstimatedTripBudget)).to.eql(Number(b.flightFare) + Number(b.totalHotelCost) + Number(b.totalSightseeingCost)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estimate budget CCU -> BKK again (cache hit)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=BKK&nights=4",
+            "description": "Within 10 s this is an L1 (Caffeine) hit; after 10 s but within 10 min an L2 (Redis) hit. Verify with redis-cli (see guide).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"same result served from cache\", () => pm.expect(Number(pm.response.json().totalEstimatedTripBudget)).to.eql(16680));",
+                  "pm.test(\"fast (L1 Caffeine / L2 Redis) < 300 ms\", () => pm.expect(pm.response.responseTime).to.be.below(300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estimate budget CCU -> HKT (3 nights)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=hkt&nights=3",
+            "description": "Lower-case 'hkt' is normalised to upper case by the controller.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"route\", () => { pm.expect(b.sourceCode).to.eql(\"CCU\"); pm.expect(b.destinationCity).to.eql(\"Phuket\"); });",
+                  "pm.test(\"cheapest flight = 6E-1048 @ 14050\", () => { pm.expect(b.flightNumber).to.eql(\"6E-1048\"); pm.expect(Number(b.flightFare)).to.eql(14050); });",
+                  "pm.test(\"cheapest hotel in destination city\", () => { pm.expect(b.recommendedHotel).to.eql(\"Patong Backpackers Lodge\"); pm.expect(b.roomType).to.eql(\"Fan Room\"); pm.expect(Number(b.pricePerNight)).to.eql(1300); });",
+                  "pm.test(\"hotel cost = price x 3 nights\", () => pm.expect(Number(b.totalHotelCost)).to.eql(1300 * 3));",
+                  "pm.test(\"sightseeing: 4 places, 2600 total\", () => { pm.expect(b.totalAttractionsPlanned).to.eql(4); pm.expect(Number(b.totalSightseeingCost)).to.eql(2600); });",
+                  "pm.test(\"TOTAL BUDGET = 20550\", () => pm.expect(Number(b.totalEstimatedTripBudget)).to.eql(20550));",
+                  "pm.test(\"total equals flight + hotel + sightseeing\", () =>",
+                  "  pm.expect(Number(b.totalEstimatedTripBudget)).to.eql(Number(b.flightFare) + Number(b.totalHotelCost) + Number(b.totalSightseeingCost)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estimate budget CCU -> KUL (5 nights)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=KUL&nights=5",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"route\", () => { pm.expect(b.sourceCode).to.eql(\"CCU\"); pm.expect(b.destinationCity).to.eql(\"Kuala Lumpur\"); });",
+                  "pm.test(\"cheapest flight = AK-050 @ 12550\", () => { pm.expect(b.flightNumber).to.eql(\"AK-050\"); pm.expect(Number(b.flightFare)).to.eql(12550); });",
+                  "pm.test(\"cheapest hotel in destination city\", () => { pm.expect(b.recommendedHotel).to.eql(\"Bukit Bintang Stay\"); pm.expect(b.roomType).to.eql(\"Standard Double\"); pm.expect(Number(b.pricePerNight)).to.eql(1700); });",
+                  "pm.test(\"hotel cost = price x 5 nights\", () => pm.expect(Number(b.totalHotelCost)).to.eql(1700 * 5));",
+                  "pm.test(\"sightseeing: 4 places, 4150 total\", () => { pm.expect(b.totalAttractionsPlanned).to.eql(4); pm.expect(Number(b.totalSightseeingCost)).to.eql(4150); });",
+                  "pm.test(\"TOTAL BUDGET = 25200\", () => pm.expect(Number(b.totalEstimatedTripBudget)).to.eql(25200));",
+                  "pm.test(\"total equals flight + hotel + sightseeing\", () =>",
+                  "  pm.expect(Number(b.totalEstimatedTripBudget)).to.eql(Number(b.flightFare) + Number(b.totalHotelCost) + Number(b.totalSightseeingCost)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estimate budget CCU -> DXB (2 nights)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=DXB&nights=2",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"route\", () => { pm.expect(b.sourceCode).to.eql(\"CCU\"); pm.expect(b.destinationCity).to.eql(\"Dubai\"); });",
+                  "pm.test(\"cheapest flight = EK-571 @ 25100\", () => { pm.expect(b.flightNumber).to.eql(\"EK-571\"); pm.expect(Number(b.flightFare)).to.eql(25100); });",
+                  "pm.test(\"cheapest hotel in destination city\", () => { pm.expect(b.recommendedHotel).to.eql(\"Deira Budget Hotel\"); pm.expect(b.roomType).to.eql(\"Standard Double\"); pm.expect(Number(b.pricePerNight)).to.eql(3100); });",
+                  "pm.test(\"hotel cost = price x 2 nights\", () => pm.expect(Number(b.totalHotelCost)).to.eql(3100 * 2));",
+                  "pm.test(\"sightseeing: 4 places, 13800 total\", () => { pm.expect(b.totalAttractionsPlanned).to.eql(4); pm.expect(Number(b.totalSightseeingCost)).to.eql(13800); });",
+                  "pm.test(\"TOTAL BUDGET = 45100\", () => pm.expect(Number(b.totalEstimatedTripBudget)).to.eql(45100));",
+                  "pm.test(\"total equals flight + hotel + sightseeing\", () =>",
+                  "  pm.expect(Number(b.totalEstimatedTripBudget)).to.eql(Number(b.flightFare) + Number(b.totalHotelCost) + Number(b.totalSightseeingCost)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estimate budget - no route (DEL -> BKK) = 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=DEL&destination=BKK&nights=3",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 Not Found (no flight in sample data)\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estimate budget - invalid airport code = 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=BANGKOK&nights=3",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request (@Pattern [A-Za-z]{3})\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estimate budget - nights out of range = 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/estimate-budget?source=CCU&destination=BKK&nights=0",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request (@Min(1))\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search flights CCU -> BKK",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/flights?source=CCU&destination=BKK",
+            "description": "Hits only the flights_international partition.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const f = pm.response.json();",
+                  "pm.test(\"3 fares returned (FD-136, TG-314, AI-380)\", () => pm.expect(f.length).to.eql(3));",
+                  "pm.test(\"sorted by total_fare ascending\", () => { const t = f.map(x => Number(x.total_fare)); pm.expect(t).to.eql([...t].sort((a, b) => a - b)); });",
+                  "pm.test(\"cheapest is FD-136\", () => pm.expect(f[0].flight_number).to.eql(\"FD-136\"));",
+                  "pm.test(\"international flights\", () => f.forEach(x => pm.expect(x.flight_type).to.eql(\"INTERNATIONAL\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search flights CCU -> DEL (domestic partition)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/flights?source=CCU&destination=DEL",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const f = pm.response.json();",
+                  "pm.test(\"2 domestic fares\", () => { pm.expect(f.length).to.eql(2); f.forEach(x => pm.expect(x.flight_type).to.eql(\"DOMESTIC\")); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Find hotels in Bangkok",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/hotels?city=Bangkok",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const h = pm.response.json();",
+                  "pm.test(\"3 available room offers, cheapest first\", () => { pm.expect(h.length).to.eql(3); pm.expect(Number(h[0].price_per_night)).to.eql(650); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Find hotels - Phi Phi Island (hotel without airport)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/hotels?city=Phi Phi Island",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Tonsai Bay Bungalows\", () => pm.expect(pm.response.json()[0].hotel_name).to.eql(\"Tonsai Bay Bungalows\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Booking commands & saga (write side)",
+      "description": "RUN THIS FOLDER WITH THE COLLECTION RUNNER (not request by request) so the polling requests can loop. Order matters: the bookingId created in step 1 is reused by the later requests.",
+      "item": [
+        {
+          "name": "3.1 Create booking (alice) -> 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gatewayUrl}}/api/v1/bookings",
+            "description": "RBAC: needs role CUSTOMER/ADMIN. ABAC: tenantId must equal the token's tenant_id and user_location must be allowed (IN, TH, MY, VN, AE). Writes bookings + 2 outbox rows (BOOKING_CREATED, PAYMENT_REQUESTED) in ONE transaction.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"sourceCode\": \"CCU\",\n  \"destCode\": \"BKK\",\n  \"flightId\": {{flightId}},\n  \"stayNights\": 4,\n  \"totalAmount\": 16680.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"starts as PENDING_PAYMENT\", () => pm.expect(b.status).to.eql(\"PENDING_PAYMENT\"));",
+                  "pm.test(\"bookingId is a UUID\", () => pm.expect(b.bookingId).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.environment.set(\"bookingId\", b.bookingId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.2 Poll read model until CONFIRMED",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/bookings/{{bookingId}}",
+            "description": "Flow: Debezium -> topic booking-payment -> payment-saga-service (simulated approval) -> outbox booking-saga -> Debezium -> booking-command-service sets CONFIRMED + BOOKING_CONFIRMED event -> topic booking -> query service upserts booking_read_model.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(function () {}, 2000); // wait 2 s between polls (Debezium + Kafka latency)"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = \"CONFIRMED\";",
+                  "const key = \"poll_confirmed\";",
+                  "let n = Number(pm.variables.get(key) || pm.environment.get(key) || 0);",
+                  "let status = null;",
+                  "if (pm.response.code === 200) { status = pm.response.json().status; }",
+                  "if (status !== expected && n < 12) {",
+                  "  pm.environment.set(key, n + 1);",
+                  "  console.log(\"Not yet \" + expected + \" (got \" + status + \", HTTP \" + pm.response.code + \"). Retry \" + (n + 1));",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.environment.unset(key);",
+                  "  pm.test(\"read model reached CONFIRMED (CDC -> Kafka -> projection)\", () => pm.expect(status).to.eql(expected));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.3 Read model detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/bookings/{{bookingId}}",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"projection fields\", () => {",
+                  "  pm.expect(b.booking_id).to.eql(pm.environment.get(\"bookingId\"));",
+                  "  pm.expect(b.status).to.eql(\"CONFIRMED\");",
+                  "  pm.expect(b.source_code).to.eql(\"CCU\");",
+                  "  pm.expect(b.dest_code).to.eql(\"BKK\");",
+                  "  pm.expect(Number(b.total_amount)).to.eql(16680);",
+                  "  pm.expect(b.tenant_id).to.eql(pm.environment.get(\"tenantId\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.4 ABAC: wrong tenant -> 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gatewayUrl}}/api/v1/bookings",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"some-other-tenant\",\n  \"sourceCode\": \"CCU\",\n  \"destCode\": \"BKK\",\n  \"flightId\": {{flightId}},\n  \"stayNights\": 4,\n  \"totalAmount\": 16680.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 Forbidden (tenant mismatch, @abac.allow=false)\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.5 Validation: bad payload -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gatewayUrl}}/api/v1/bookings",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"sourceCode\": \"CCU\",\n  \"destCode\": \"BANGKOK\",\n  \"flightId\": 1,\n  \"stayNights\": 0,\n  \"totalAmount\": -5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request (Bean Validation)\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.6 No token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gatewayUrl}}/api/v1/bookings",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"sourceCode\": \"CCU\",\n  \"destCode\": \"BKK\",\n  \"flightId\": {{flightId}},\n  \"stayNights\": 4,\n  \"totalAmount\": 16680.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 Unauthorized\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.7 Ownership: bob cannot cancel alice's booking -> 403",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/bookings/{{bookingId}}",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{user2Token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 Forbidden (not the owner)\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.8 Admin processor stats (virtual-thread counters) -> 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/bookings/processor-stats",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test(\"counters from AtomicLong\", () => { pm.expect(s.submitted).to.be.at.least(1); pm.expect(s.succeeded).to.be.at.least(1); });",
+                  "pm.test(\"lastProcessedAt set (AtomicReference)\", () => pm.expect(s.lastProcessedAt).to.not.be.null);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.9 RBAC: customer cannot read stats -> 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/bookings/processor-stats",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 Forbidden (needs ROLE_ADMIN)\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.10 Cancel booking (alice) -> 200 CANCELLED",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/bookings/{{bookingId}}",
+            "description": "Booking was CONFIRMED, so a REFUND_REQUESTED event is also written to the outbox (saga compensation).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status CANCELLED\", () => pm.expect(pm.response.json().status).to.eql(\"CANCELLED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.11 Cancel again (idempotent) -> 200",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/bookings/{{bookingId}}",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"still CANCELLED\", () => pm.expect(pm.response.json().status).to.eql(\"CANCELLED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.12 Poll read model until CANCELLED",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/bookings/{{bookingId}}",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(function () {}, 2000); // wait 2 s between polls (Debezium + Kafka latency)"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = \"CANCELLED\";",
+                  "const key = \"poll_cancelled\";",
+                  "let n = Number(pm.variables.get(key) || pm.environment.get(key) || 0);",
+                  "let status = null;",
+                  "if (pm.response.code === 200) { status = pm.response.json().status; }",
+                  "if (status !== expected && n < 12) {",
+                  "  pm.environment.set(key, n + 1);",
+                  "  console.log(\"Not yet \" + expected + \" (got \" + status + \", HTTP \" + pm.response.code + \"). Retry \" + (n + 1));",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.environment.unset(key);",
+                  "  pm.test(\"read model reached CANCELLED (CDC -> Kafka -> projection)\", () => pm.expect(status).to.eql(expected));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.13 Cancel unknown booking -> 404",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/bookings/00000000-0000-0000-0000-000000000000",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.14 Admin may create for any tenant (ABAC bypass) -> 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gatewayUrl}}/api/v1/bookings",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"any-tenant\",\n  \"sourceCode\": \"CCU\",\n  \"destCode\": \"BKK\",\n  \"flightId\": {{flightId}},\n  \"stayNights\": 4,\n  \"totalAmount\": 16680.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Resilience: retry topics + DLT (needs payment service restarted - see guide)",
+      "description": "Restart payment-saga-service with PAYMENT_SIMULATE=false and PAYMENT_GATEWAY_URL=http://localhost:9 so every gateway call fails. Circuit breaker fallback returns DEFERRED -> PaymentUnavailableException -> 3 exponential Kafka retries (1 s, 2 s, 4 s) -> booking-payment.DLT -> compensation PAYMENT_FAILED.",
+      "item": [
+        {
+          "name": "4.1 Create booking (payment gateway down)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gatewayUrl}}/api/v1/bookings",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"sourceCode\": \"CCU\",\n  \"destCode\": \"BKK\",\n  \"flightId\": {{flightId}},\n  \"stayNights\": 4,\n  \"totalAmount\": 16680.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created (command side accepts regardless of payment health)\", () => pm.response.to.have.status(201));",
+                  "pm.environment.set(\"bookingId\", pm.response.json().bookingId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.2 Poll read model until PAYMENT_FAILED",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/travel/bookings/{{bookingId}}",
+            "description": "Takes ~10-25 s: resilience4j retries (3 x 500 ms+) per Kafka attempt, then retry topics, then DLT.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(function () {}, 2000); // wait 2 s between polls (Debezium + Kafka latency)"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const expected = \"PAYMENT_FAILED\";",
+                  "const key = \"poll_failed\";",
+                  "let n = Number(pm.variables.get(key) || pm.environment.get(key) || 0);",
+                  "let status = null;",
+                  "if (pm.response.code === 200) { status = pm.response.json().status; }",
+                  "if (status !== expected && n < 20) {",
+                  "  pm.environment.set(key, n + 1);",
+                  "  console.log(\"Not yet \" + expected + \" (got \" + status + \", HTTP \" + pm.response.code + \"). Retry \" + (n + 1));",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.environment.unset(key);",
+                  "  pm.test(\"read model reached PAYMENT_FAILED (CDC -> Kafka -> projection)\", () => pm.expect(status).to.eql(expected));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Gateway rate limiting (token bucket)",
+      "description": "Run this folder in the Runner with 250 iterations and 0 ms delay. Booking route: replenishRate 50/s, burstCapacity 100.",
+      "item": [
+        {
+          "name": "5.1 Rate-limit probe (admin stats)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayUrl}}/api/v1/bookings/processor-stats",
+            "description": "Expect the first ~100 calls to return 200 and later ones 429 when sent faster than 50 req/s.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK or 429 Too Many Requests\", () => pm.expect([200, 429]).to.include(pm.response.code));",
+                  "if (pm.response.code === 429) {",
+                  "  pm.test(\"429 carries limiter headers\", () => pm.expect(pm.response.headers.has(\"X-RateLimit-Remaining\")).to.be.true);",
+                  "  console.log(\"Rate limited - token bucket is working\");",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

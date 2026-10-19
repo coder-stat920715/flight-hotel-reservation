@@ -1,0 +1,13 @@
+# Helm values fragment for prometheus-adapter:  helm upgrade -i prometheus-adapter prometheus-community/prometheus-adapter -f this-file
+rules:
+  default: false
+  custom:
+    - seriesQuery: 'http_server_requests_seconds_count{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: namespace}
+          pod: {resource: pod}
+      name:
+        matches: "^http_server_requests_seconds_count$"
+        as: "http_server_requests_per_second"
+      metricsQuery: 'sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)'
